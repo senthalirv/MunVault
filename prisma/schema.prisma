@@ -1,0 +1,175 @@
+// MUNVault Prisma Schema
+// Configured for local SQLite development with seamless migration to PostgreSQL in production
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Conference {
+  id               String             @id @default(cuid())
+  name             String
+  date             String?
+  committee        String
+  portfolio        String
+  agenda           String
+  notes            String?
+  award            String?            // "Best Delegate", "Outstanding Delegate", "High Commendation", "Special Mention", "Verbal Mention", "Participation"
+  status           String             @default("active") // "active", "past", "archived"
+  countryFlag      String?            @default("🌐")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  documents        Document[]
+  researchAnalyses ResearchAnalysis[]
+  practiceSessions PracticeSession[]
+  speeches         Speech[]
+}
+
+model Document {
+  id              String               @id @default(cuid())
+  conferenceId    String
+  title           String
+  category        String               // "RESEARCH", "GSL", "MODERATED_CAUCUS", "UNMODERATED_CAUCUS", "POI", "RESOLUTION", "SMALL_NOTE", "REFERENCE", "OTHER"
+  content         String
+  summary         String?
+  fileName        String?
+  fileSize        Int?
+  mimeType        String?              @default("text/plain")
+  fileUrl         String?
+  tags            String?              // Comma-separated or JSON string
+  isImmutable     Boolean              @default(true)
+  coverageScore   Float?               @default(80.0)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  conference      Conference           @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  sourceLinks     DocumentConnection[] @relation("SourceDoc")
+  targetLinks     DocumentConnection[] @relation("TargetDoc")
+  speech          Speech?
+
+  @@index([conferenceId])
+  @@index([category])
+}
+
+model DocumentConnection {
+  id              String   @id @default(cuid())
+  sourceDocId     String
+  targetDocId     String
+  connectionType  String   @default("THEMATIC") // "RESEARCH_TO_SPEECH", "SPEECH_TO_CAUCUS", "SPEECH_TO_POI", "RESEARCH_TO_RESOLUTION", "POI_TO_RESOLUTION", "THEMATIC"
+  similarityScore Float    @default(75.0)
+  explanation     String?
+  status          String   @default("accepted") // "accepted", "suggested", "rejected"
+  createdAt       DateTime @default(now())
+
+  sourceDoc       Document @relation("SourceDoc", fields: [sourceDocId], references: [id], onDelete: Cascade)
+  targetDoc       Document @relation("TargetDoc", fields: [targetDocId], references: [id], onDelete: Cascade)
+
+  @@index([sourceDocId])
+  @@index([targetDocId])
+}
+
+model ResearchAnalysis {
+  id                   String     @id @default(cuid())
+  conferenceId         String
+  overallScore         Float      // 0 - 10 scale e.g. 8.4
+  countryPositionScore Float      // 0 - 100
+  historicalScore      Float      // 0 - 100
+  unPrecedentsScore    Float      // 0 - 100
+  resolutionsScore     Float      // 0 - 100
+  oppositionScore      Float      // 0 - 100
+  implementationScore  Float      // 0 - 100
+  sourcesScore         Float      // 0 - 100
+  strongAreas          String     // JSON array string
+  missingAreas         String     // JSON array string
+  feedback             String     // Comprehensive strategic feedback
+  createdAt            DateTime   @default(now())
+
+  conference           Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+
+  @@index([conferenceId])
+}
+
+model Speech {
+  id              String             @id @default(cuid())
+  conferenceId    String
+  documentId      String?            @unique
+  title           String
+  speechType      String             // "GSL", "MODERATED_CAUCUS", "CRISIS_SPEECH"
+  content         String
+  themes          String?            // JSON array of themes
+  arguments       String?            // JSON array of key arguments
+  policyProposals String?            // JSON array of policy proposals
+  evidenceUsed    String?            // JSON array of evidence/treaties
+  framingType     String?            // "Humanitarian", "Security", "Economic", "Legalist", "Diplomatic"
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  conference      Conference         @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  document        Document?          @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  comparisonsA    SpeechComparison[] @relation("SpeechA")
+  comparisonsB    SpeechComparison[] @relation("SpeechB")
+
+  @@index([conferenceId])
+}
+
+model SpeechComparison {
+  id                 String   @id @default(cuid())
+  speechAId          String
+  speechBId          String
+  overallSimilarity  Float    // 0 - 100%
+  wordingSimilarity  Float    // 0 - 100%
+  framingSimilarity  Float    // 0 - 100%
+  policySimilarity   Float    // 0 - 100%
+  evidenceSimilarity Float    // 0 - 100%
+  explanation        String?
+  createdAt          DateTime @default(now())
+
+  speechA            Speech   @relation("SpeechA", fields: [speechAId], references: [id], onDelete: Cascade)
+  speechB            Speech   @relation("SpeechB", fields: [speechBId], references: [id], onDelete: Cascade)
+
+  @@index([speechAId])
+  @@index([speechBId])
+}
+
+model PracticeSession {
+  id                   String      @id @default(cuid())
+  conferenceId         String?
+  question             String
+  topic                String?
+  committee            String?
+  portfolio            String?
+  userTranscript       String
+  contentScore         Float       // 0 - 10
+  accuracyScore        Float       // 0 - 10
+  relevanceScore       Float       // 0 - 10
+  diplomacyScore       Float       // 0 - 10
+  structureScore       Float       // 0 - 10
+  rebuttalScore        Float       // 0 - 10
+  overallScore         Float       // 0 - 10
+  strengths            String?
+  weaknesses           String?
+  actionableSuggestion String?
+  createdAt            DateTime    @default(now())
+
+  conference           Conference? @relation(fields: [conferenceId], references: [id], onDelete: SetNull)
+
+  @@index([conferenceId])
+}
+
+model DelegateProfile {
+  id              String   @id @default("default-profile")
+  name            String   @default("Delegate Workspace")
+  institution     String   @default("International MUN Delegation")
+  country         String   @default("United Kingdom")
+  avatarInitials  String   @default("MV")
+  practiceStreak  Int      @default(4)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
